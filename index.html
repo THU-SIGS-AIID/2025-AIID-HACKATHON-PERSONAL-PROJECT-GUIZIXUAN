@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>场景音乐匹配器</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#60A5FA',
+            secondary: '#F3F4F6'
+          },
+          borderRadius: {
+            'none': '0px',
+            'sm': '2px',
+            DEFAULT: '4px',
+            'md': '8px',
+            'lg': '12px',
+            'xl': '16px',
+            '2xl': '20px',
+            '3xl': '24px',
+            'full': '9999px',
+            'button': '4px'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background-color: #F9FAFB;
+      color: #1F2937;
+      min-height: 1024px;
+    }
+    .font-logo {
+      font-family: 'Pacifico', cursive;
+    }
+    .upload-area {
+      border: 2px dashed #D1D5DB;
+      transition: all 0.3s ease;
+    }
+    .upload-area:hover, .upload-area.dragover {
+      border-color: #60A5FA;
+      background-color: #EFF6FF;
+    }
+    .audio-player {
+      background-color: white;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    }
+    .progress-bar {
+      height: 6px;
+      background-color: #E5E7EB;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background-color: #60A5FA;
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+    .volume-slider {
+      width: 80px;
+    }
+    .song-card {
+      background: linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%);
+    }
+  </style>
+</head>
+<body class="flex flex-col items-center p-8">
+  <header class="w-full max-w-4xl mb-12 text-center">
+    <h1 class="text-4xl font-logo text-primary mb-2">场景音乐匹配器</h1>
+    <p class="text-gray-600">上传你的第一视角视频，智能匹配最适合的背景音乐</p>
+  </header>
+
+  <main class="w-full max-w-4xl flex flex-col gap-12">
+    <!-- 视频上传区域 -->
+    <section class="bg-white rounded-xl shadow-sm p-8">
+      <h2 class="text-2xl font-semibold mb-6 text-gray-800">上传视频</h2>
+      <div id="uploadArea" class="upload-area rounded-lg p-12 text-center cursor-pointer transition-all">
+        <i class="fas fa-cloud-upload-alt text-5xl text-gray-400 mb-4"></i>
+        <p class="text-gray-600 mb-2">拖拽视频到此处或点击选择文件</p>
+        <p class="text-sm text-gray-500 mb-4">支持 MP4、MOV、AVI 格式，最大 500MB</p>
+        <button id="fileSelectBtn" class="!rounded-button bg-primary text-white px-6 py-2 hover:bg-blue-500 transition whitespace-nowrap">
+          <i class="fas fa-folder-open mr-2"></i>选择视频
+        </button>
+        <input type="file" id="fileInput" accept="video/*" class="hidden">
+      </div>
+      
+      <div id="videoPreview" class="mt-6 hidden">
+        <div class="flex items-center justify-between bg-gray-50 rounded-lg p-4">
+          <div class="flex items-center">
+            <i class="fas fa-file-video text-2xl text-gray-500 mr-3"></i>
+            <div>
+              <p id="fileName" class="font-medium text-gray-800">video.mp4</p>
+              <p id="fileSize" class="text-sm text-gray-500">24.5 MB</p>
+            </div>
+          </div>
+          <button id="reuploadBtn" class="text-gray-500 hover:text-primary">
+            <i class="fas fa-redo mr-1"></i>重新上传
+          </button>
+        </div>
+        <div class="mt-4 flex justify-center">
+          <video id="previewVideo" controls class="max-h-64 rounded-lg shadow-sm"></video>
+        </div>
+      </div>
+    </section>
+
+    <!-- 处理状态区域 -->
+    <section id="processingSection" class="hidden bg-white rounded-xl shadow-sm p-8 text-center">
+      <h2 class="text-2xl font-semibold mb-4 text-gray-800">正在分析视频</h2>
+      <div class="flex justify-center mb-4">
+        <div class="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      </div>
+      <p class="text-gray-600">AI 正在识别场景并匹配最佳音乐...</p>
+      <p class="text-sm text-gray-500 mt-2">预计需要 15-30 秒</p>
+    </section>
+
+    <!-- 匹配结果区域 -->
+    <section id="resultSection" class="hidden">
+      <div class="song-card rounded-xl shadow-sm p-8 mb-8">
+        <h2 class="text-2xl font-semibold mb-6 text-gray-800">推荐歌曲</h2>
+        <div class="flex flex-col md:flex-row items-center gap-8">
+          <div class="flex-shrink-0">
+            <img src="https://ai-public.mastergo.com/ai/img_res/bffe2502cb34e82e5185f97cff156c9f.jpg" alt="专辑封面" class="w-48 h-48 rounded-xl object-cover shadow-md">
+          </div>
+          <div class="text-center md:text-left">
+            <h3 id="songTitle" class="text-3xl font-bold text-gray-900 mb-2">Midnight City</h3>
+            <p id="artistName" class="text-xl text-gray-700 mb-1">M83</p>
+            <p id="albumName" class="text-gray-600 mb-6">Hurry Up, We're Dreaming</p>
+            <div class="flex flex-wrap justify-center md:justify-start gap-3">
+              <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">电子</span>
+              <span class="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm">氛围</span>
+              <span class="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full text-sm">梦幻</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 音频播放器 -->
+      <div class="audio-player rounded-xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h4 class="font-semibold text-gray-800">现在播放</h4>
+            <p id="timeInfo" class="text-sm text-gray-600">0:00 / 4:04</p>
+          </div>
+          <div class="flex items-center space-x-4">
+            <button class="text-gray-600 hover:text-primary">
+              <i class="fas fa-volume-up text-lg"></i>
+            </button>
+            <input type="range" min="0" max="100" value="80" class="volume-slider accent-primary" id="volumeSlider">
+          </div>
+        </div>
+        
+        <div class="progress-bar mb-4" id="progressBar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        
+        <div class="flex justify-center space-x-8">
+          <button class="text-gray-600 hover:text-primary" id="prevBtn">
+            <i class="fas fa-step-backward text-xl"></i>
+          </button>
+          <button id="playPauseBtn" class="!rounded-button w-14 h-14 bg-primary text-white flex items-center justify-center hover:bg-blue-500 transition">
+            <i class="fas fa-play text-xl"></i>
+          </button>
+          <button class="text-gray-600 hover:text-primary" id="nextBtn">
+            <i class="fas fa-step-forward text-xl"></i>
+          </button>
+        </div>
+        
+        <!-- 隐藏的audio元素 -->
+        <audio id="audioPlayer" class="hidden"></audio>
+      </div>
+    </section>
+
+    <!-- 错误提示区域 -->
+    <section id="errorSection" class="hidden bg-white rounded-xl shadow-sm p-8 text-center">
+      <i class="fas fa-exclamation-circle text-5xl text-red-400 mb-4"></i>
+      <h2 class="text-2xl font-semibold mb-2 text-gray-800">匹配失败</h2>
+      <p class="text-gray-600 mb-6">抱歉，未能找到匹配的歌曲。请尝试上传其他视频或稍后重试。</p>
+      <button id="retryBtn" class="!rounded-button bg-primary text-white px-6 py-2 hover:bg-blue-500 transition">
+        <i class="fas fa-redo mr-2"></i>重新上传
+      </button>
+    </section>
+  </main>
+
+  <footer class="w-full max-w-4xl mt-16 pt-8 border-t border-gray-200 text-center text-gray-500 text-sm">
+    <p>© 2023 场景音乐匹配器 · 让每一帧画面都有完美的配乐</p>
+  </footer>
+
+  <script>
+    // DOM 元素
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const fileSelectBtn = document.getElementById('fileSelectBtn');
+    const videoPreview = document.getElementById('videoPreview');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const previewVideo = document.getElementById('previewVideo');
+    const reuploadBtn = document.getElementById('reuploadBtn');
+    const processingSection = document.getElementById('processingSection');
+    const resultSection = document.getElementById('resultSection');
+    const errorSection = document.getElementById('errorSection');
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    const retryBtn = document.getElementById('retryBtn');
+    const progressFill = document.getElementById('progressFill');
+    const progressBar = document.getElementById('progressBar');
+    const songTitle = document.getElementById('songTitle');
+    const artistName = document.getElementById('artistName');
+    const albumName = document.getElementById('albumName');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const volumeSlider = document.getElementById('volumeSlider');
+    const timeInfo = document.getElementById('timeInfo');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    
+    // API配置
+    const API_URL = 'http://43.133.4.161/v1';
+    const API_KEY = 'app-JbwqLHwwA5PcDbQResHMnAll';
+    
+    // 事件监听器
+    fileSelectBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', handleFileSelect);
+    uploadArea.addEventListener('dragover', handleDragOver);
+    uploadArea.addEventListener('drop', handleDrop);
+    reuploadBtn.addEventListener('click', resetUpload);
+    retryBtn.addEventListener('click', resetUpload);
+    progressBar.addEventListener('click', seek);
+    volumeSlider.addEventListener('input', adjustVolume);
+    
+    let isPlaying = false;
+    let currentSong = null;
+    playPauseBtn.addEventListener('click', togglePlay);
+    prevBtn.addEventListener('click', playPrevious);
+    nextBtn.addEventListener('click', playNext);
+    
+    // 音频播放器事件监听
+    audioPlayer.addEventListener('timeupdate', updateProgress);
+    audioPlayer.addEventListener('loadedmetadata', updateDuration);
+    audioPlayer.addEventListener('ended', handleSongEnd);
+    
+    // 文件处理函数
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (file && file.type.startsWith('video/')) {
+        processFile(file);
+      }
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('video/')) {
+        processFile(file);
+      }
+    }
+
+    function processFile(file) {
+      // 显示文件信息
+      fileName.textContent = file.name;
+      fileSize.textContent = formatFileSize(file.size);
+      
+      // 创建视频预览
+      const videoURL = URL.createObjectURL(file);
+      previewVideo.src = videoURL;
+      
+      // 显示预览区域
+      videoPreview.classList.remove('hidden');
+      
+      // 开始处理流程
+      startProcessing(file);
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    async function startProcessing(videoFile) {
+      // 隐藏上传区域，显示处理状态
+      document.querySelector('section.bg-white').classList.add('hidden');
+      processingSection.classList.remove('hidden');
+      
+      try {
+        // 1. 上传视频文件
+        const uploadedFile = await uploadFile(videoFile);
+        
+        // 2. 读取音乐列表
+        const musicList = await fetchMusicList();
+        
+        // 3. 调用Dify API进行场景匹配
+        const result = await callDifyAPI(uploadedFile, musicList);
+        
+        // 4. 显示结果
+        processingSection.classList.add('hidden');
+        showResult(result);
+      } catch (error) {
+        console.error('处理过程中出错:', error);
+        processingSection.classList.add('hidden');
+        showErrorWithMessage(error.message || '处理过程中发生未知错误');
+      }
+    }
+
+    async function uploadFile(file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('user', 'web-user');
+      
+      const response = await fetch(`${API_URL}/files/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || '文件上传失败');
+      }
+      
+      const data = await response.json();
+      return data;
+    }
+
+    async function fetchMusicList() {
+      const response = await fetch('./music/music_list.txt');
+      if (!response.ok) {
+        throw new Error('无法获取音乐列表，请检查网络连接');
+      }
+      
+      const text = await response.text();
+      return text;
+    }
+
+    async function callDifyAPI(videoFile, musicList) {
+      const inputs = {
+        scene_input: [{
+          "transfer_method": "local_file",
+          "upload_file_id": videoFile.id,
+          "type": "video"
+        }],
+        music_list: musicList
+      };
+      
+      const response = await fetch(`${API_URL}/workflows/run`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          inputs: inputs,
+          response_mode: 'blocking',
+          user: 'web-user'
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'API调用失败，请稍后重试');
+      }
+      
+      const data = await response.json();
+      return data.data.outputs;
+    }
+
+    function showResult(outputs) {
+      // 解析输出结果
+      if (outputs && outputs.text) {
+        const songName = outputs.text.trim();
+        // 在这里可以根据歌曲名设置对应的歌手和专辑信息
+        // 简化处理，实际项目中应该从音乐库中获取完整信息
+        songTitle.textContent = songName;
+        artistName.textContent = getArtistBySong(songName);
+        albumName.textContent = getAlbumBySong(songName);
+        
+        // 设置当前歌曲信息
+        currentSong = {
+          name: songName,
+          artist: artistName.textContent,
+          album: albumName.textContent,
+          url: `./music/${songName}.mp3`
+        };
+        
+        resultSection.classList.remove('hidden');
+        
+        // 加载并播放音乐
+        loadAndPlayMusic();
+      } else {
+        showErrorWithMessage('未找到匹配的歌曲');
+      }
+    }
+
+    function getArtistBySong(songName) {
+      // 简化的艺术家映射，实际项目中应该从音乐库中获取
+      const artistMap = {
+        '日落大道': '梁博',
+        '海鸥': '逃跑计划',
+        '蓝莲花': '许巍',
+        '在雨中': '汪峰',
+        '小行迹': '赵雷'
+      };
+      return artistMap[songName] || '未知艺术家';
+    }
+
+    function getAlbumBySong(songName) {
+      // 简化的专辑映射，实际项目中应该从音乐库中获取
+      const albumMap = {
+        '日落大道': '日落大道',
+        '海鸥': '回到海洋',
+        '蓝莲花': '怒放的生命',
+        '在雨中': '花火',
+        '小行迹': '无法长大'
+      };
+      return albumMap[songName] || '未知专辑';
+    }
+
+    function loadAndPlayMusic() {
+      // 显示加载状态
+      const playButton = playPauseBtn.querySelector('i');
+      playButton.className = 'fas fa-spinner fa-spin text-xl';
+      
+      // 加载音乐文件
+      audioPlayer.src = currentSong.url;
+      audioPlayer.load();
+      
+      // 监听加载完成事件
+      audioPlayer.addEventListener('canplay', function() {
+        // 自动播放
+        audioPlayer.play()
+          .then(() => {
+            isPlaying = true;
+            updatePlayPauseButton();
+          })
+          .catch(error => {
+            console.error('播放失败:', error);
+            // 即使播放失败，也显示播放界面
+            isPlaying = false;
+            updatePlayPauseButton();
+            showErrorWithMessage('音乐播放失败，请检查文件是否存在');
+          });
+      }, { once: true }); // 只执行一次
+      
+      // 监听加载错误事件
+      audioPlayer.addEventListener('error', function() {
+        console.error('音乐文件加载失败');
+        isPlaying = false;
+        updatePlayPauseButton();
+        showErrorWithMessage('音乐文件加载失败，请检查文件是否存在');
+      }, { once: true });
+    }
+
+    function updatePlayPauseButton() {
+      const icon = playPauseBtn.querySelector('i');
+      if (audioPlayer.readyState < 2) {
+        // 如果音乐还未加载完成，显示加载状态
+        icon.className = 'fas fa-spinner fa-spin text-xl';
+      } else {
+        // 根据播放状态显示播放或暂停图标
+        icon.className = isPlaying ? 'fas fa-pause text-xl' : 'fas fa-play text-xl';
+      }
+    }
+
+    function togglePlay() {
+      if (isPlaying) {
+        audioPlayer.pause();
+      } else {
+        audioPlayer.play()
+          .catch(error => {
+            console.error('播放失败:', error);
+          });
+      }
+      isPlaying = !isPlaying;
+      updatePlayPauseButton();
+    }
+
+    function updateProgress() {
+      const percent = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+      progressFill.style.width = `${percent}%`;
+      
+      // 更新时间信息
+      const currentTime = formatTime(audioPlayer.currentTime);
+      const duration = formatTime(audioPlayer.duration);
+      timeInfo.textContent = `${currentTime} / ${duration}`;
+    }
+
+    function updateDuration() {
+      const duration = formatTime(audioPlayer.duration);
+      timeInfo.textContent = `0:00 / ${duration}`;
+    }
+
+    function formatTime(seconds) {
+      if (isNaN(seconds)) return '0:00';
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    function seek(e) {
+      const width = progressBar.clientWidth;
+      const clickX = e.offsetX;
+      const duration = audioPlayer.duration;
+      audioPlayer.currentTime = (clickX / width) * duration;
+    }
+
+    function adjustVolume() {
+      audioPlayer.volume = volumeSlider.value / 100;
+    }
+
+    function handleSongEnd() {
+      isPlaying = false;
+      updatePlayPauseButton();
+      progressFill.style.width = '0%';
+    }
+
+    function playPrevious() {
+      // 简化处理，实际项目中应该有播放列表
+      console.log('播放上一首');
+    }
+
+    function playNext() {
+      // 简化处理，实际项目中应该有播放列表
+      console.log('播放下一首');
+    }
+
+    function showErrorWithMessage(message) {
+      // 显示错误信息
+      const errorText = document.querySelector('#errorSection p.text-gray-600');
+      if (errorText) {
+        errorText.textContent = message || '抱歉，未能找到匹配的歌曲。请尝试上传其他视频或稍后重试。';
+      }
+      showError();
+    }
+
+    function showError() {
+      document.querySelector('section.bg-white').classList.add('hidden');
+      errorSection.classList.remove('hidden');
+    }
+
+    function resetUpload() {
+      // 重置所有状态
+      fileInput.value = '';
+      videoPreview.classList.add('hidden');
+      processingSection.classList.add('hidden');
+      resultSection.classList.add('hidden');
+      errorSection.classList.add('hidden');
+      document.querySelector('section.bg-white').classList.remove('hidden');
+      progressFill.style.width = '0%';
+      
+      // 重置播放状态
+      isPlaying = false;
+      updatePlayPauseButton();
+      
+      // 停止音频播放
+      audioPlayer.pause();
+      audioPlayer.currentTime = 0;
+    }
+  </script>
+</body>
+</html>
